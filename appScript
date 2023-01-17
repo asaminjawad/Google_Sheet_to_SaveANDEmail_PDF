@@ -1,0 +1,83 @@
+//ids of templete doc, sheet and folder where the pdf will be saved
+const SHEETID = 'PASTE THE SHEET ID HERE';
+const DOCID = 'PASTE THE DOC ID HERE';
+const FOLDERID = 'PASTE THE FOLDER ID HERE';
+const rowWithEmail = 3; //Change this '3' to the row number where the email will be stored (rows start from 0, not 1).
+
+// Add a new menu in the sheet named 'Email Out' 
+function onOpen(){
+  SpreadsheetApp.getUi().createMenu('Email Out').addItem('Send Emails','sender').addToUi();
+}
+
+
+//sender is the main function to do everyhting. 
+function sender() {
+  //open the main google sheet file and then select the sheet by name. 
+  const sheet = SpreadsheetApp.openById(SHEETID).getSheetByName('data');
+  //get all the data from the ragne of fields.
+  const data = sheet.getDataRange().getValues();
+  //get the template doc 
+  const temp = DriveApp.getFileById(DOCID);
+  //get the folder for saving pdf
+  const folder = DriveApp.getFolderById(FOLDERID);
+  //keep one row from data that we got 3 lines ago.
+  const rows = data.slice(1);
+
+  
+  // run a forEach loop through all rows- one at a time
+  rows.forEach((row,index)=>{
+    //Do everyhting if row number 4 is empty (This is where the date is written after sending the email)
+    if(row[4] == ''){
+      //make a copy of template doc file in the PDF folder
+      const file = temp.makeCopy(folder);
+      //open the copied doc file.
+      const doc = DocumentApp.openById(file.getId());
+      //get everythign in the doc and keep it in body
+      const body = doc.getBody();
+      
+      //go through the doc and replace words 
+        data[0].forEach((heading,i)=>{
+          //we wrote all the heading name in the doc, thats why we need to make row header in the google sheet upper case. (you can avoid doing it)
+          const header1 = heading.toUpperCase();
+          //you can replace the next line with 'header' and remove the line before this. if you keep the same word. 
+          body.replaceText(`{${header1}}`, row[i]);
+      })
+      //set the name of the doc and get the value from the sheet
+      doc.setName(row[0]+row[1]);
+      //what kind of format you want to save the doc file after editing? (MimeType = Multipurpose Internet Mail Extensions)
+      const blob = doc.getAs(MimeType.PDF);
+      //save the doc and close it.
+      doc.saveAndClose();
+      //finally create the pdf file and save the name of the pdf
+      const pdf = folder.createFile(blob).setName(row[1]+row[2]+'.pdf');
+      
+    // Everyhting below this is for email
+    // Note: You dont need to do everything to send the pdf file in the email. just set the blob variable and a few things. 
+
+
+    // set the row of the sheet where the email is in which you want to send the pdf.
+    const email = row[3];
+    //write the subject line of the email.
+    const subject = row[0]+row[1]+'new file created';
+    //write the body of the email.
+    const messageBody = `Hi ${row[1]} Welcome ! Here is you PDF file!`;
+
+    //function to send email
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      htmlBody: messageBody,
+      attachments: [blob.getAs(MimeType.PDF)]
+    });
+
+    // Next is to populate sheet with the date the email was sent
+    //(starting row, column number which will be updated, number of row, number of column that we are updating)
+    const tempo = sheet.getRange(index+2, 5, 1, 1); 
+    tempo.setValue(new Date());
+    
+    //delete the template doc file from the pdf folder.
+    file.setTrashed(true);
+  }})
+}
+
+
